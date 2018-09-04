@@ -86,13 +86,65 @@ let getScaledPointerPosition = (stage) => {
 };
 
 
+class Disposition {
+	constructor(x, y, direction, value, cb) {
+		let disposition = this;
+
+		this.x = x;
+		this.y = y;
+		this.direction = direction;
+		this.head = new Konva.RegularPolygon({
+			x: x,
+			y: y,
+			sides: 3,
+			radius: 1,
+			rotation: this.direction * (180 / Math.PI) - 30,
+			fill: 'red',
+			stroke: 'black',
+			strokeWidth: 0.1,
+			draggable: true,
+			dragBoundFunc: function (pos) {return this.getAbsolutePosition();},
+		});
+		this.head.on('dragmove', function(e) {
+			let pos = getScaledPointerPosition(this.getStage());
+			let radius = getDistance(pos, disposition);
+			disposition.setValue(radius);
+			this.getLayer().draw();
+			cb(radius);
+		});
+		this.setValue(value);
+	}
+
+	setValue(value) {
+		console.log(
+			this.direction,
+			this.x, Math.cos(this.direction), value,
+			this.y, Math.sin(this.direction), value,
+		);
+		this.head.position({
+			x: this.x + Math.cos(this.direction) * value,
+			y: this.y + Math.sin(this.direction) * value,
+		});
+	}
+
+	drawOn(stage) {
+		stage.add(this.head);
+	};
+}
+
+
 class Node {
-	constructor(x, y, production) {
+	/**
+	 * `connections` is map id => direction
+	 */
+	constructor(x, y, connections, production) {
 		let node = this;
 
 		this.x = x;
 		this.y = y;
 		this.production = production;
+		this.connections = connections;
+
 		this.radius = Math.pow(this.production / Math.PI, 0.5) * UNIT_SCALE;
 		this.radiusWidth = this.radius * 0.3;
 
@@ -101,6 +153,7 @@ class Node {
 			x: this.x,
 			y: this.y,
 			fill: NODE_COLOR,
+			listening: false,
 		});
 
 		this.targetCircle = new Konva.Ring({
@@ -119,11 +172,21 @@ class Node {
 			this.innerRadius(radius);
 			this.getLayer().draw();
 		});
+
+		// create dispositions
+		this.dispositions = new Map();
+		for (let connection of connections.entries()) {
+			this.dispositions.set(
+				connection[0],
+				new Disposition(this.x, this.y, connection[1], 10, () => {}),
+			);
+		}
 	}
 
 	drawOn(stage) {
 		stage.add(this.productionCircle);
 		stage.add(this.targetCircle);
+		this.dispositions.forEach(disposition => disposition.drawOn(stage));
 	};
 }
 
@@ -169,14 +232,10 @@ class Game {
 
 	}
 
-	setNodeStats(nodeId, x, y, production) {
-		if (this.nodes.has(nodeId)) {
-			console.assert(false);
-		} else {
-			let node = new Node(x, y, production);
-			this.nodes.set(nodeId, node);
-			node.drawOn(this.layer);
-		}
+	addNode(nodeId, node) {
+		console.assert(!this.nodes.has(nodeId));
+		this.nodes.set(nodeId, node);
+		node.drawOn(this.layer);
 	}
 
 	setConnection(connectionId, nodeAId, nodeBId, length, throughput) {
@@ -208,9 +267,12 @@ class Game {
 }
 
 var game = new Game('container');
-game.setNodeStats(0, 0, 0, 1);
-game.setNodeStats(2, 5, 0, 2);
-game.setNodeStats(1, 10, 20, 10);
+game.addNode(0, new Node(0, 0, new Map(), 1));
+game.addNode(2, new Node(5, 0, new Map(), 2));
+game.addNode(1, new Node(10, 20, new Map([
+	['a', 0],
+	['b', Math.PI/6],
+]), 10));
 game.setConnection(0, 0, 1, 10, 3);
 game.setConnection(1, 1, 2, 10, 10);
 game.canvas.draw();
