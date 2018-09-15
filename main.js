@@ -2,6 +2,8 @@ const UNIT_SCALE = 1;
 const THROUGHPUT_SCALE = 1;
 const NODE_COLOR = 'rgba(0, 0, 0, 0.3)';
 const CONNECTION_COLOR = '#bbb';
+const DISPOSITIONS_SUM = 30;
+
 
 const ZOOM_INIT = 10;
 const ZOOM_MAX = 100;
@@ -13,6 +15,7 @@ let getDistance = (p1, p2) => {
 	return Math.sqrt(Math.pow((p2.x - p1.x), 2) + Math.pow((p2.y - p1.y), 2));
 }
 
+let rad2deg = (rad => rad * 180 / Math.PI);
 
 let prepareCanvas = (stage) => {
 	// resizing to full width
@@ -93,12 +96,13 @@ class Disposition {
 		this.x = x;
 		this.y = y;
 		this.direction = direction;
+
 		this.head = new Konva.RegularPolygon({
 			x: x,
 			y: y,
 			sides: 3,
 			radius: 1,
-			rotation: this.direction * (180 / Math.PI) - 30,
+			rotation: rad2deg(this.direction) - 30,
 			fill: 'red',
 			stroke: 'black',
 			strokeWidth: 0.1,
@@ -109,18 +113,14 @@ class Disposition {
 			let pos = getScaledPointerPosition(this.getStage());
 			let radius = getDistance(pos, disposition);
 			disposition.setValue(radius);
-			this.getLayer().draw();
 			cb(radius);
+			this.getLayer().draw();
 		});
 		this.setValue(value);
 	}
 
 	setValue(value) {
-		console.log(
-			this.direction,
-			this.x, Math.cos(this.direction), value,
-			this.y, Math.sin(this.direction), value,
-		);
+		this.value = value;
 		this.head.position({
 			x: this.x + Math.cos(this.direction) * value,
 			y: this.y + Math.sin(this.direction) * value,
@@ -175,13 +175,44 @@ class Node {
 
 		// create dispositions
 		this.dispositions = new Map();
-		for (let connection of connections.entries()) {
+		for (let [connection_id, connection] of connections.entries()) {
 			this.dispositions.set(
-				connection[0],
-				new Disposition(this.x, this.y, connection[1], 10, () => {}),
+				connection_id,
+				new Disposition(
+					this.x, this.y, connection, DISPOSITIONS_SUM / this.connections.size,
+					(value) => this.dispositionUpdate(connection_id, value),
+				),
 			);
 		}
 	}
+
+	dispositionUpdate(connection_id, value) {
+		console.assert(value >= 0);
+		if (value > DISPOSITIONS_SUM) {
+			value = DISPOSITIONS_SUM;
+			this.dispositions.get(connection_id).setValue(value);
+		}
+		let sum = 0;
+		for (let [cid, disposition] of this.dispositions.entries()) {
+			if (cid == connection_id) continue;
+			sum += disposition.value;
+			console.log(cid, disposition.value);
+		}
+		if (sum == 0) {
+			// other dispositions was set to 0, so we need to add constantComponent to them
+			var ratio = 0;
+			if (this.dispositions.size == 1) return;
+			var constantComponent = (DISPOSITIONS_SUM - value) / (this.dispositions.size - 1);
+		} else {
+			var ratio = (DISPOSITIONS_SUM - value) / sum;
+			var constantComponent = 0;
+		}
+		console.log(value, sum, ratio);
+		for (let [cid, disposition] of this.dispositions.entries()) {
+			if (cid == connection_id) continue;
+			disposition.setValue(disposition.value * ratio + constantComponent);
+		}
+	};
 
 	drawOn(stage) {
 		stage.add(this.productionCircle);
@@ -272,6 +303,7 @@ game.addNode(2, new Node(5, 0, new Map(), 2));
 game.addNode(1, new Node(10, 20, new Map([
 	['a', 0],
 	['b', Math.PI/6],
+	['c', 1],
 ]), 10));
 game.setConnection(0, 0, 1, 10, 3);
 game.setConnection(1, 1, 2, 10, 10);
