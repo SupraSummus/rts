@@ -13,12 +13,13 @@ game.addConnection(2, 'node1', 'node0', 10000, 0.3);
 game.addConnection(1, 'node1', 'node2', 10000, 1);
 game.canvas.draw();
 
-game.updateMovements(0, Date.now(), [
-	{width: 0.1, color: 'pink'},
-]);
-setTimeout(
+
+setInterval(
 	() => {
-		game.updateMovements(0, Date.now(), []);
+		game.updateMovements(0, Date.now(), [
+			{width: Math.random() / 5, color: rgb2str(HSVtoRGB(Math.random(), 1, 1))},
+			{width: Math.random() / 5, color: rgb2str(HSVtoRGB(Math.random(), 1, 1))},
+		]);
 	},
-	10000,
+	2000,
 );

@@ -52,8 +52,13 @@ class Connection {
 		this.width = width;
 		this.travelTime = travelTime;
 
+		this.prependicularUnit = ang2v(Math.atan2(to.x - from.x, to.y - from.y) + Math.PI / 2);
+
 		this.line = new Konva.Line({
-			points: xyobjs2array([this.from, this.to]),
+			points: xyobjs2array([
+				this._linePoint(0, 0, this.width),
+				this._linePoint(this.travelTime, 0, this.width),
+			]),
 			stroke: TERRAIN_COLOR,
 			strokeWidth: this.width,
 			lineCap: 'round',
@@ -74,7 +79,7 @@ class Connection {
 				]),
 				stroke: movement.color,
 				strokeWidth: movement.width,
-				lineCap: 'round',
+				lineCap: 'butt',
 				lineJoin: 'round',
 			});
 			widthOffset += movement.width;
@@ -94,7 +99,7 @@ class Connection {
 			// update previous ends
 			let widthOffset = 0;
 			for (let line of previousLines) {
-				let lineWidth = line.strokeWidth;
+				let lineWidth = line.strokeWidth();
 				let pts = line.points();
 				line.points(xyobjs2array([
 					conn._linePoint(t - time, widthOffset, lineWidth),
@@ -105,7 +110,7 @@ class Connection {
 			// animate front lines
 			widthOffset = 0;
 			for (let line of newLines) {
-				let lineWidth = line.strokeWidth;
+				let lineWidth = line.strokeWidth();
 				let pts = line.points();
 				line.points(xyobjs2array([
 					{x: pts[0], y: pts[1]},
@@ -127,10 +132,12 @@ class Connection {
 
 	_linePoint(timeTraveled, widthOffset, width) {
 		let ratio = timeTraveled / this.travelTime;
-		return add_v_v(
+		let offset = CONNECTION_SPACING / 2 + widthOffset + width / 2;
+		return sum_v([
 			mul_v_s(this.from, ratio),
 			mul_v_s(this.to, 1 - ratio),
-		);
+			mul_v_s(this.prependicularUnit, offset),
+		]);
 	}
 
 }
@@ -289,15 +296,8 @@ class Game {
 		let width = throughput / THROUGHPUT_SCALE;
 		let nodeA = this.nodes.get(nodeAId);
 		let nodeB = this.nodes.get(nodeBId);
-		let x1 = nodeA.x;
-		let x2 = nodeB.x;
-		let y1 = nodeA.y;
-		let y2 = nodeB.y;
-		let direction = Math.atan2(x2 - x1, y2 - y1);
-		let offx = Math.sin(direction + Math.PI / 2) * (width / 2 + CONNECTION_SPACING / 2);
-		let offy = Math.cos(direction + Math.PI / 2) * (width / 2 + CONNECTION_SPACING / 2);
 		let connection = new Connection(
-			{x: x1 + offx, y: y1 + offy}, {x: x2 + offx, y: y2 + offy},
+			nodeA, nodeB,
 			width, length,
 		);
 		this.connections.set(connectionId, connection);
