@@ -1,9 +1,11 @@
+// ### settings ###
+
 const UNIT_SCALE = 1;
 const THROUGHPUT_SCALE = 1;
 const TERRAIN_COLOR = '#aaa';
 const CONTROLS_COLOR = 'rgba(0, 0, 0, 0.7)';
 const DISPOSITIONS_SUM = 30;
-const CONNECTION_SPACING = 0.2;
+const CONNECTION_SPACING = 0.1;
 const CONTROLS_SIZE = 1;
 
 
@@ -12,6 +14,7 @@ const ZOOM_MAX = 100;
 const ZOOM_MIN = 0.5;
 const ZOOM_SPEED = 1/800;
 
+// ### functions for manipulating points ###
 
 let getDistance = (p1, p2) => {
 	return Math.sqrt(Math.pow((p2.x - p1.x), 2) + Math.pow((p2.y - p1.y), 2));
@@ -19,7 +22,7 @@ let getDistance = (p1, p2) => {
 
 let rad2deg = (rad => rad * 180 / Math.PI);
 
-let xysobjs2arr = (objs => {
+let xyobjs2array = (objs => {
 	let pts = [];
 	for (let o of objs) {
 		pts.push(o.x);
@@ -27,6 +30,12 @@ let xysobjs2arr = (objs => {
 	}
 	return pts;
 });
+
+let mul_v_s = ((v, s) => ({x: v.x * s, y: v.y * s}));
+let add_v_v = ((v, w) => ({x: v.x + w.x, y: v.y + w.y}));
+let ang2v = (ang => ({x: Math.sin(ang), y: Math.cos(ang)}));
+
+// ### canvas utils ###
 
 let prepareCanvas = (stage) => {
 	// resizing to full width
@@ -100,6 +109,8 @@ let getScaledPointerPosition = (stage) => {
 };
 
 
+// ### game itself ###
+
 class Disposition {
 	constructor(x, y, direction, value, cb) {
 		let disposition = this;
@@ -144,24 +155,95 @@ class Disposition {
 
 class Connection {
 	/**
-	 * points is an array of objects: [{x, y}, {x2, y2}, ..., {xn, yn}]
+	 * points is an array of objects: [{x, y, timeToNext}, {x2, y2, ...}, ..., {xn, yn, ...}]
 	 */
-	constructor(points, width) {
-		this.points = points;
+	constructor(from, to, width, travelTime) {
+		this.from = from;
+		this.to = to;
 		this.width = width;
+		this.travelTime = travelTime;
 
 		this.line = new Konva.Line({
-			points: this.points,
+			points: xyobjs2array([this.from, this.to]),
 			stroke: TERRAIN_COLOR,
 			strokeWidth: this.width,
 			lineCap: 'round',
 			lineJoin: 'round',
 		});
+		this.previousLines = [];
 	}
 
-	drawOn(terrainLayer, unitsLayer, controlsLayer, debugLayer) {
-		terrainLayer.add(this.line);
+	updateMovements(time, movements) {
+		// create new lines
+		let newLines = [];
+		let widthOffset = 0;
+		for (let movement of movements) {
+			let line = new Konva.Line({
+				points: xyobjs2array([
+					this._linePoint(0, widthOffset, movement.width),
+					this._linePoint(0, widthOffset, movement.width),
+				]),
+				stroke: movement.color,
+				strokeWidth: movement.width,
+				lineCap: 'round',
+				lineJoin: 'round',
+			});
+			widthOffset += movement.width;
+			this.unitsLayer.add(line);
+			newLines.push(line);
+		}
+
+		// animate movement
+		let conn = this;
+		let previousLines = this.previousLines;
+		this.animationManager.registerAnimation(t => {
+			// the end has reached - terminte the animation
+			if (t >= time + conn.travelTime) {
+				previousLines.forEach(l => l.destroy());
+				return false;
+			}
+			// update previous ends
+			let widthOffset = 0;
+			for (let line of previousLines) {
+				let lineWidth = line.strokeWidth;
+				let pts = line.points();
+				line.points(xyobjs2array([
+					conn._linePoint(t - time, widthOffset, lineWidth),
+					{x: pts[2], y: pts[3]},
+				]));
+				widthOffset += lineWidth;
+			}
+			// animate front lines
+			widthOffset = 0;
+			for (let line of newLines) {
+				let lineWidth = line.strokeWidth;
+				let pts = line.points();
+				line.points(xyobjs2array([
+					{x: pts[0], y: pts[1]},
+					conn._linePoint(t - time, widthOffset, lineWidth),
+				]));
+				widthOffset += lineWidth;
+			}
+			return true;
+		});
+
+		this.previousLines = newLines;
 	}
+
+	drawOn(terrainLayer, unitsLayer, controlsLayer, debugLayer, animationManager) {
+		terrainLayer.add(this.line);
+		this.unitsLayer = unitsLayer;
+		this.animationManager = animationManager;
+	}
+
+	_linePoint(timeTraveled, widthOffset, width) {
+		let ratio = timeTraveled / this.travelTime;
+		return add_v_v(
+			mul_v_s(this.from, ratio),
+			mul_v_s(this.to, 1 - ratio),
+		);
+	}
+
 }
 
 
@@ -253,6 +335,8 @@ class Node {
 
 class Game {
 	constructor(containerId) {
+		let game = this;
+
 		this.canvas = new Konva.Stage({
 			container: containerId,
 			draggable: true,
@@ -274,7 +358,6 @@ class Game {
 
 		prepareCanvas(this.canvas);
 
-		let game = this;
 		this.canvas.on('mouse:over', (e) => {
 			if (e.target != null) {
 				if (e.target.gameNodeId != undefined) {
@@ -297,6 +380,12 @@ class Game {
 			fill: 'red',
 		}));
 
+		// animation
+		this.animations = [];
+		(new Konva.Animation(function(frame) {
+			let time = Date.now();
+			game.animations = game.animations.filter(a => a(time));
+		}, this.unitsLayer)).start();
 	}
 
 	addNode(nodeId, node) {
@@ -319,18 +408,28 @@ class Game {
 		let offx = Math.sin(direction + Math.PI / 2) * (width / 2 + CONNECTION_SPACING / 2);
 		let offy = Math.cos(direction + Math.PI / 2) * (width / 2 + CONNECTION_SPACING / 2);
 		let connection = new Connection(
-			[x1 + offx, y1 + offy, x2 + offx, y2 + offy],
-			width,
+			{x: x1 + offx, y: y1 + offy}, {x: x2 + offx, y: y2 + offy},
+			width, length,
 		);
 		this.connections.set(connectionId, connection);
-		connection.drawOn(this.terrainLayer, this.unitsLayer, this.controlsLayer, this.debugLayer);
+		connection.drawOn(this.terrainLayer, this.unitsLayer, this.controlsLayer, this.debugLayer, this);
+	}
+
+	updateMovements(connectionId, time, movements) {
+		this.connections.get(connectionId).updateMovements(time, movements);
 	}
 
 	setNodeUnits(nodeId, playerUnitsMap) {
 		
 	}
 
+	registerAnimation(f) {
+		this.animations.push(f);
+	}
+
 }
+
+// ### running the game ###
 
 var game = new Game('container');
 game.addNode('node0', new Node(0, 0, new Map(), 1));
@@ -340,7 +439,17 @@ game.addNode('node1', new Node(10, 20, new Map([
 	['b', Math.PI/6],
 	['c', 1],
 ]), 10));
-game.addConnection(0, 'node0', 'node1', 10, 0.3);
-game.addConnection(2, 'node1', 'node0', 10, 0.3);
-game.addConnection(1, 'node1', 'node2', 10, 1);
+game.addConnection(0, 'node0', 'node1', 10000, 0.3);
+game.addConnection(2, 'node1', 'node0', 10000, 0.3);
+game.addConnection(1, 'node1', 'node2', 10000, 1);
 game.canvas.draw();
+
+game.updateMovements(0, Date.now(), [
+	{width: 0.1, color: 'pink'},
+]);
+setTimeout(
+	() => {
+		game.updateMovements(0, Date.now(), []);
+	},
+	10000,
+);
