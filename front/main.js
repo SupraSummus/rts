@@ -20,6 +20,13 @@ setInterval(
 			{width: Math.random() / 5, color: rgb2str(HSVtoRGB(Math.random(), 1, 1))},
 			{width: Math.random() / 5, color: rgb2str(HSVtoRGB(Math.random(), 1, 1))},
 		]);
+		game.updateUnits('node1', [
+			{amount: Math.random() * 2, color: rgb2str(HSVtoRGB(Math.random(), 1, 1))},
+			{amount: Math.random() * 2, color: rgb2str(HSVtoRGB(Math.random(), 1, 1))},
+			{amount: Math.random() * 2, color: rgb2str(HSVtoRGB(Math.random(), 1, 1))},
+			{amount: Math.random() * 2, color: rgb2str(HSVtoRGB(Math.random(), 1, 1))},
+			{amount: Math.random() * 2, color: rgb2str(HSVtoRGB(Math.random(), 1, 1))},
+		]);
 	},
-	2000,
+	4000,
 );

@@ -143,6 +143,47 @@ class Connection {
 }
 
 
+class NodeUnits {
+	constructor(x, y) {
+		this.x = x;
+		this.y = y;
+		this.drawEnvironment = null;
+
+		this.units = [];
+	}
+
+	update(units) {
+		this.units.forEach(u => u.destroy());
+		this.units = [];
+
+		let totalUnits = units.reduce((a, u) => (a + u.amount), 0);
+		let outerRadius = Math.sqrt(totalUnits / Math.PI) * UNIT_SCALE;
+
+		let ang = 0; // in degrees
+		for (let u of units) {
+			let thisAng = (u.amount / totalUnits) * 360;
+			let arc = new Konva.Arc({
+				x: this.x,
+				y: this.y,
+				innerRadius: 0,
+				outerRadius: outerRadius,
+				rotation: ang,
+				angle: thisAng,
+				fill: u.color,
+			});
+			ang += thisAng;
+			this.drawEnvironment.unitsLayer.add(arc);
+			this.units.push(arc);
+		}
+	}
+
+	drawOn(drawEnvironment) {
+		this.drawEnvironment = drawEnvironment;
+	};
+
+}
+
+
 class Node {
 	/**
 	 * `connections` is map id => direction
@@ -193,6 +234,13 @@ class Node {
 				),
 			);
 		}
+
+		// units
+		this.units = new NodeUnits(this.x, this.y);
+	}
+
+	updateUnits(units) {
+		return this.units.update(units);
 	}
 
 	dispositionUpdate(connection_id, value) {
@@ -225,6 +273,9 @@ class Node {
 		terrainLayer.add(this.productionCircle);
 		controlsLayer.add(this.targetCircle);
 		this.dispositions.forEach(disposition => disposition.drawOn(terrainLayer, unitsLayer, controlsLayer, debugLayer));
+		this.units.drawOn({
+			unitsLayer: unitsLayer,
+		});
 	};
 }
 
@@ -308,8 +359,8 @@ class Game {
 		this.connections.get(connectionId).updateMovements(time, movements);
 	}
 
-	setNodeUnits(nodeId, playerUnitsMap) {
-		
+	updateUnits(nodeId, units) {
+		return this.nodes.get(nodeId).updateUnits(units);
 	}
 
 	registerAnimation(f) {
