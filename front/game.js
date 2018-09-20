@@ -1,16 +1,19 @@
 // ### game itself ###
 
 class Disposition {
-	constructor(x, y, direction, value, cb) {
+	constructor(drawingThing, pos, direction, value, cb) {
 		let disposition = this;
 
-		this.x = x;
-		this.y = y;
+		this.drawingThing = drawingThing;
+		this.pos = pos;
 		this.direction = direction;
+		this.value = value;
+
+		this.unitVector = ang2v(this.direction);
 
 		this.head = new Konva.RegularPolygon({
-			x: x,
-			y: y,
+			x: this.pos.x,
+			y: this.pos.y,
 			sides: 3,
 			radius: CONTROLS_SIZE,
 			rotation: rad2deg(this.direction) - 30,
@@ -18,9 +21,10 @@ class Disposition {
 			draggable: true,
 			dragBoundFunc: function (pos) {return this.getAbsolutePosition();},
 		});
+		this.drawingThing.controlsLayer.add(this.head);
 		this.head.on('dragmove', function(e) {
 			let pos = getScaledPointerPosition(this.getStage());
-			let radius = getDistance(pos, disposition);
+			let radius = getDistance(pos, disposition.pos);
 			disposition.setValue(radius);
 			cb(radius);
 			this.getLayer().draw();
@@ -30,15 +34,11 @@ class Disposition {
 
 	setValue(value) {
 		this.value = value;
-		this.head.position({
-			x: this.x + Math.cos(this.direction) * value,
-			y: this.y + Math.sin(this.direction) * value,
-		});
+		this.head.position(sum_v([
+			this.pos,
+			mul_v_s(this.unitVector, this.value),
+		]));
 	}
-
-	drawOn(terrainLayer, unitsLayer, controlsLayer, debugLayer) {
-		controlsLayer.add(this.head);
-	};
 }
 
 
@@ -46,24 +46,36 @@ class Connection {
 	/**
 	 * points is an array of objects: [{x, y, timeToNext}, {x2, y2, ...}, ..., {xn, yn, ...}]
 	 */
-	constructor(from, to, width, travelTime) {
+	constructor(drawingThing, from, to, throughput, travelTime, dispositionCallback, dispositionInitialValue) {
+		this.drawingThing = drawingThing;
 		this.from = from;
 		this.to = to;
-		this.width = width;
+		this.throughput = throughput;
 		this.travelTime = travelTime;
 
-		this.prependicularUnit = ang2v(Math.atan2(to.x - from.x, to.y - from.y) + Math.PI / 2);
+		this.direction = Math.atan2(to.y - from.y, to.x - from.x);
+		this.prependicularUnit = ang2v(this.direction + Math.PI / 2);
+
+		this.disposition = new Disposition(
+			this.drawingThing,
+			this._linePoint(0, 0, this.throughput),
+			this.direction,
+			dispositionInitialValue,
+			dispositionCallback,
+		);
 
 		this.line = new Konva.Line({
 			points: xyobjs2array([
-				this._linePoint(0, 0, this.width),
-				this._linePoint(this.travelTime, 0, this.width),
+				this._linePoint(0, 0, this.throughput),
+				this._linePoint(this.travelTime, 0, this.throughput),
 			]),
 			stroke: TERRAIN_COLOR,
-			strokeWidth: this.width,
+			strokeWidth: this.throughput,
 			lineCap: 'round',
 			lineJoin: 'round',
 		});
+		this.drawingThing.terrainLayer.add(this.line);
+
 		this.previousLines = [];
 	}
 
@@ -83,14 +95,14 @@ class Connection {
 				lineJoin: 'round',
 			});
 			widthOffset += movement.width;
-			this.unitsLayer.add(line);
+			this.drawingThing.unitsLayer.add(line);
 			newLines.push(line);
 		}
 
 		// animate movement
 		let conn = this;
 		let previousLines = this.previousLines;
-		this.animationManager.registerAnimation(t => {
+		this.drawingThing.registerAnimation(t => {
 			// the end has reached - terminte the animation
 			if (t >= time + conn.travelTime) {
 				previousLines.forEach(l => l.destroy());
@@ -124,18 +136,12 @@ class Connection {
 		this.previousLines = newLines;
 	}
 
-	drawOn(terrainLayer, unitsLayer, controlsLayer, debugLayer, animationManager) {
-		terrainLayer.add(this.line);
-		this.unitsLayer = unitsLayer;
-		this.animationManager = animationManager;
-	}
-
 	_linePoint(timeTraveled, widthOffset, width) {
 		let ratio = timeTraveled / this.travelTime;
 		let offset = CONNECTION_SPACING / 2 + widthOffset + width / 2;
 		return sum_v([
-			mul_v_s(this.from, ratio),
-			mul_v_s(this.to, 1 - ratio),
+			mul_v_s(this.from, 1 - ratio),
+			mul_v_s(this.to, ratio),
 			mul_v_s(this.prependicularUnit, offset),
 		]);
 	}
@@ -144,10 +150,10 @@ class Connection {
 
 
 class NodeUnits {
-	constructor(x, y) {
+	constructor(drawingThing, x, y) {
+		this.drawingThing = drawingThing;
 		this.x = x;
 		this.y = y;
-		this.drawEnvironment = null;
 
 		this.units = [];
 	}
@@ -172,15 +178,10 @@ class NodeUnits {
 				fill: u.color,
 			});
 			ang += thisAng;
-			this.drawEnvironment.unitsLayer.add(arc);
+			this.drawingThing.unitsLayer.add(arc);
 			this.units.push(arc);
 		}
 	}
-
-	drawOn(drawEnvironment) {
-		this.drawEnvironment = drawEnvironment;
-	};
-
 }
 
 
@@ -188,16 +189,28 @@ class Node {
 	/**
 	 * `connections` is map id => direction
 	 */
-	constructor(x, y, connections, production) {
+	constructor(drawingThing, x, y, production, connections) {
 		let node = this;
 
+		this.drawingThing = drawingThing;
 		this.x = x;
 		this.y = y;
 		this.production = production;
-		this.connections = connections;
 
-		this.radius = Math.pow(this.production / Math.PI, 0.5) * UNIT_SCALE;
+		this.connections = mapMap(connections, (v, connId) => {
+			return new Connection(
+				node.drawingThing,
+				node, v,
+				v.throughput, v.travelTime,
+				(value) => node._dispositionUpdate(connId, value),
+				DISPOSITIONS_SUM / connections.size,
+			);
+		});
+		this.dispositions = mapMap(this.connections, c => c.disposition);
 
+		this.radius = Math.sqrt(this.production / Math.PI) * UNIT_SCALE;
+
+		// production
 		this.productionCircle = new Konva.Circle({
 			radius: this.radius,
 			x: this.x,
@@ -205,7 +218,9 @@ class Node {
 			fill: TERRAIN_COLOR,
 			listening: false,
 		});
+		this.drawingThing.terrainLayer.add(this.productionCircle);
 
+		// target
 		this.targetCircle = new Konva.Ring({
 			innerRadius: this.radius,
 			outerRadius: this.radius + CONTROLS_SIZE,
@@ -215,6 +230,7 @@ class Node {
 			draggable: true,
 			dragBoundFunc: function (pos) {return this.getAbsolutePosition();},
 		});
+		this.drawingThing.controlsLayer.add(this.targetCircle);
 		this.targetCircle.on('dragmove', function(e) {
 			let pos = getScaledPointerPosition(this.getStage());
 			let radius = getDistance(pos, node);
@@ -223,27 +239,19 @@ class Node {
 			this.getLayer().draw();
 		});
 
-		// create dispositions
-		this.dispositions = new Map();
-		for (let [connection_id, connection] of connections.entries()) {
-			this.dispositions.set(
-				connection_id,
-				new Disposition(
-					this.x, this.y, connection, DISPOSITIONS_SUM / this.connections.size,
-					(value) => this.dispositionUpdate(connection_id, value),
-				),
-			);
-		}
-
 		// units
-		this.units = new NodeUnits(this.x, this.y);
+		this.units = new NodeUnits(this.drawingThing, this.x, this.y);
 	}
 
 	updateUnits(units) {
 		return this.units.update(units);
 	}
 
-	dispositionUpdate(connection_id, value) {
+	updateMovements(targetId, startTime, movements) {
+		return this.connections.get(targetId).updateMovements(startTime, movements);
+	}
+
+	_dispositionUpdate(connection_id, value) {
 		console.assert(value >= 0);
 		if (value > DISPOSITIONS_SUM) {
 			value = DISPOSITIONS_SUM;
@@ -268,27 +276,19 @@ class Node {
 			disposition.setValue(disposition.value * ratio + constantComponent);
 		}
 	};
-
-	drawOn(terrainLayer, unitsLayer, controlsLayer, debugLayer) {
-		terrainLayer.add(this.productionCircle);
-		controlsLayer.add(this.targetCircle);
-		this.dispositions.forEach(disposition => disposition.drawOn(terrainLayer, unitsLayer, controlsLayer, debugLayer));
-		this.units.drawOn({
-			unitsLayer: unitsLayer,
-		});
-	};
 }
 
 
 class Game {
-	constructor(containerId) {
+	constructor(container, map) {
 		let game = this;
 
 		this.canvas = new Konva.Stage({
-			container: containerId,
+			container: container,
 			draggable: true,
 			x: 0, y: 0,
 		});
+		container.style['background-color'] = BACKGROUND_COLOR;
 		this.stage = this.canvas;
 
 		this.terrainLayer = new Konva.Layer();
@@ -297,35 +297,12 @@ class Game {
 		this.stage.add(this.unitsLayer);
 		this.controlsLayer = new Konva.Layer();
 		this.stage.add(this.controlsLayer);
-		this.debugLayer = new Konva.Layer();
-		this.stage.add(this.debugLayer);
 
 		this.nodes = new Map();
 		this.connections = new Map();
 
+		// zoom, drag, ...
 		prepareCanvas(this.canvas);
-
-		this.canvas.on('mouse:over', (e) => {
-			if (e.target != null) {
-				if (e.target.gameNodeId != undefined) {
-					game.showNodeControls(e.target.gameNodeId);
-				}
-			}
-		});
-
-		//canvas.setBackgroundColor('gray');
-		this.debugLayer.add(new Konva.Rect({
-			x: 0, y:0,
-			width: 1,
-			height: 1,
-			fill: 'red',
-		}));
-		this.debugLayer.add(new Konva.Rect({
-			x:10, y:10,
-			width: 1,
-			height: 1,
-			fill: 'red',
-		}));
 
 		// animation
 		this.animations = [];
@@ -333,30 +310,35 @@ class Game {
 			let time = Date.now();
 			game.animations = game.animations.filter(a => a(time));
 		}, this.unitsLayer)).start();
+
+		// load map
+		for (let nodeId in map) {
+			let nodeDesc = map[nodeId];
+			this.addNode(
+				nodeId,
+				nodeDesc.x, nodeDesc.y, nodeDesc.production,
+				mapMap(obj2map(nodeDesc.connections), (conn, targetId) => ({
+					x: map[targetId].x,
+					y: map[targetId].y,
+					throughput: conn.throughput,
+					travelTime: conn.travelTime,
+				})),
+			);
+		}
+
+		// initial draw
+		this.canvas.draw();
 	}
 
-	addNode(nodeId, node) {
+	addNode(nodeId, x, y, production, connections) {
 		console.assert(!this.nodes.has(nodeId));
+		let node = new Node(this, x, y, production, connections);
 		this.nodes.set(nodeId, node);
-		node.drawOn(this.terrainLayer, this.unitsLayer, this.controlsLayer, this.debugLayer);
+		return node;
 	}
 
-	addConnection(connectionId, nodeAId, nodeBId, length, throughput) {
-		console.assert(!this.connections.has(connectionId));
-		console.assert(nodeAId != nodeBId);
-		let width = throughput / THROUGHPUT_SCALE;
-		let nodeA = this.nodes.get(nodeAId);
-		let nodeB = this.nodes.get(nodeBId);
-		let connection = new Connection(
-			nodeA, nodeB,
-			width, length,
-		);
-		this.connections.set(connectionId, connection);
-		connection.drawOn(this.terrainLayer, this.unitsLayer, this.controlsLayer, this.debugLayer, this);
-	}
-
-	updateMovements(connectionId, time, movements) {
-		this.connections.get(connectionId).updateMovements(time, movements);
+	updateMovements(fromId, toId, startTime, movements) {
+		return this.nodes.get(fromId).updateMovements(toId, startTime, movements);
 	}
 
 	updateUnits(nodeId, units) {

@@ -21,7 +21,7 @@ let sum_v = ((vs) => ({
 	x: vs.reduce(((x, v) => v.x + x), 0),
 	y: vs.reduce(((y, v) => v.y + y), 0),
 }));
-let ang2v = (ang => ({x: Math.sin(ang), y: Math.cos(ang)}));
+let ang2v = (ang => ({x: Math.cos(ang), y: Math.sin(ang)}));
 
 // ### canvas utils ###
 
@@ -94,6 +94,22 @@ let getScaledPointerPosition = (stage) => {
 	var y = (pointerPosition.y - stageAttrs.y) / stageAttrs.scaleY;
 	return {x: x, y: y};
 };
+
+// ### prelude ###
+
+let obj2map = (obj) => {
+    return new Map(Object.keys(obj).map(key => [key, obj[key]]));
+};
+
+let mapMap = (map, f) => {
+    let newMap = new Map();
+    for (let [k, v] of map.entries()) {
+        newMap.set(k, f(v, k));
+    }
+    return newMap;
+};
+
+// ### color operations ###
 
 /* accepts parameters
  * h  Object = {h:x, s:y, v:z}
