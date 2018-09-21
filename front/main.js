@@ -1,6 +1,6 @@
 // ### running the game ###
 
-var game = new Game(document.getElementById('container'), {
+var game = new Game(document.getElementById('container'), 'ws://localhost:8080/ws', {
 	'node0': {
 		x: 0, y: 0, production: 1,
 		connections: {

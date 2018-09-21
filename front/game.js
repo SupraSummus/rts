@@ -280,7 +280,7 @@ class Node {
 
 
 class Game {
-	constructor(container, map) {
+	constructor(container, wsAddr) {
 		let game = this;
 
 		this.canvas = new Konva.Stage({
@@ -299,7 +299,6 @@ class Game {
 		this.stage.add(this.controlsLayer);
 
 		this.nodes = new Map();
-		this.connections = new Map();
 
 		// zoom, drag, ...
 		prepareCanvas(this.canvas);
@@ -311,7 +310,22 @@ class Game {
 			game.animations = game.animations.filter(a => a(time));
 		}, this.unitsLayer)).start();
 
-		// load map
+		// connect to ws
+		this.sock = new WebSocket(wsAddr);
+		this.sock.onopen = (event) => {
+			console.log('connected to the server');
+			this.sock.send(JSON.stringify({type: 'map', data: null})); // ask for a map
+		};
+		this.sock.onmessage = function (event) {
+			let parsed = JSON.parse(event.data);
+			console.log('got message', parsed.type);
+			({
+				map: map => game._loadMap(map),
+			})[parsed.type](parsed.data);
+		};
+	}
+
+	_loadMap(map) {
 		for (let nodeId in map) {
 			let nodeDesc = map[nodeId];
 			this.addNode(
@@ -321,11 +335,10 @@ class Game {
 					x: map[targetId].x,
 					y: map[targetId].y,
 					throughput: conn.throughput,
-					travelTime: conn.travelTime,
+					travelTime: conn.travel_time,
 				})),
 			);
 		}
-
 		// initial draw
 		this.canvas.draw();
 	}

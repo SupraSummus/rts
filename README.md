@@ -17,3 +17,11 @@ Also, I intend to make as many as possible quantities in this game continous:
 To provide negitve feedback for large empires growth (the stronger you get the more difficult the game gets), I aim to introduce some rules:
  * units self decay (due to breakdowns/malfunction)
  * there is a limit on how many commands you can give in a period of time
+
+How to run
+----------
+
+    pipenv install
+    pipenv run python back/server.py
+
+...and websocket should be listening on `localhost:8080`

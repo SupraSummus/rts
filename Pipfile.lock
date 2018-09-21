@@ -1,0 +1,25 @@
+{
+    "_meta": {
+        "hash": {
+            "sha256": "3195eae96847e8072022ef09b373178b3240a07dc8a42de69df82fd1c1f1eeec"
+        },
+        "pipfile-spec": 6,
+        "requires": {
+            "python_version": "3.7"
+        },
+        "sources": [
+            {
+                "name": "pypi",
+                "url": "https://pypi.org/simple",
+                "verify_ssl": true
+            }
+        ]
+    },
+    "default": {
+        "simplewebsocketserver": {
+            "git": "https://github.com/dpallot/simple-websocket-server.git",
+            "ref": "34e6def93502943d426fb8bb01c6901341dd4fe6"
+        }
+    },
+    "develop": {}
+}
