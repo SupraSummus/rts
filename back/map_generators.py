@@ -1,5 +1,7 @@
 import itertools
 
+from game import Node, Connection
+
 
 class MapGenerator:
     def __init__(self, production, throughput):
@@ -8,15 +10,17 @@ class MapGenerator:
 
     def generate(self):
         return {
-            self.stringify_node_id(node_id): {
+            self.stringify_node_id(node_id): Node(
                 **self.node_position(node_id),
-                'production': self.node_production(node_id),
-                'connections': {
-                    self.stringify_node_id(to_id): self.connection_properties(node_id, to_id)
+                production=self.node_production(node_id),
+                connections={
+                    self.stringify_node_id(to_id): Connection(
+                        **self.connection_properties(node_id, to_id),
+                    )
                     for to_id in self.node_connections(node_id)
                     if to_id in self.node_ids
                 }
-            }
+            )
             for node_id in self.node_ids
         }
 
@@ -40,6 +44,7 @@ class MapGenerator:
         f = self.node_position(from_id)
         t = self.node_position(to_id)
         return {
+            'target_node_id': to_id,
             'throughput': self.throughput,
             'travel_time': ((f['x'] - t['x']) ** 2 + (f['y'] - t['y']) ** 2) ** 0.5,
         }
