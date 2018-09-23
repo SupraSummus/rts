@@ -314,7 +314,7 @@ class Game {
 		this.sock = new WebSocket(wsAddr);
 		this.sock.onopen = (event) => {
 			console.log('connected to the server');
-			this.sock.send(JSON.stringify({type: 'map', data: null})); // ask for a map
+			this.sock.send(JSON.stringify({type: 'map', data: {}})); // ask for a map
 		};
 		this.sock.onmessage = function (event) {
 			let parsed = JSON.parse(event.data);

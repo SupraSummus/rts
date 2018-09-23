@@ -3,12 +3,10 @@ from uuid import uuid4
 import logging
 from collections import defaultdict
 
+from commands import Command, Disposition
+
 
 logger = logging.getLogger(__name__)
-
-
-class GameUserError(Exception):
-    pass
 
 
 class Game:
@@ -16,6 +14,7 @@ class Game:
         self.players = {}  # map player_id -> player
         self.nodes = nodes  # map node_id -> node
         self.decay_rate = decay_rate
+        self.needs_do_frame = set()
 
     @property
     def terrain_data(self):
@@ -29,8 +28,11 @@ class Game:
         logger.info('created new player with id %s', pid)
         return pid
 
-    def feed(self, player_id, type, data):
-        self.players[player_id].feed(self, type, data)
+    def handle_command(self, player_id, data):
+        Command.from_user_data(data).execute(self, player_id)
+
+    def send(self, player_id, type, data):
+        self.players[player_id].send(type, data)
 
 
 class Node:
@@ -187,17 +189,5 @@ class Player:
         self.connection = connection
         self.color = color
 
-    def feed(self, game, type, data):
-        if type == 'map':
-            self.send('map', game.terrain_data)
-            return
-        raise GameUserError('unknown message `type`')
-
     def send(self, type, data):
         self.connection.send(type, data)
-
-
-class Disposition:
-    def __init__(self, target, ratios):
-        self.target = target
-        self.ratios = ratios

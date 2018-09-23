@@ -3,7 +3,8 @@ import logging
 import json
 import os
 
-from game import Game, GameUserError
+from game import Game
+from commands import GameUserError
 from map_generators import SquareMapGenerator
 
 
@@ -25,18 +26,8 @@ class GameConnectionHandler(WebSocket):
             except json.JSONDecodeError:
                 self.send('error', 'I only do JSONs, bro.')
                 return
-            if data.keys() != set(['type', 'data']):
-                self.send(
-                    'error',
-                    'Message has to be an object with just `type` (str) '
-                    'and `data` (anything) properties.',
-                )
-                return
             try:
-                self.server.game.feed(
-                    self.player_id,
-                    data['type'], data['data'],
-                )
+                self.server.game.handle_command(self.player_id, data)
             except GameUserError as e:
                 self.send('error', str(e))
                 return
@@ -46,7 +37,6 @@ class GameConnectionHandler(WebSocket):
             self.close(status=1011, reason='Internal server error')
 
     def send(self, type, data):
-        pass
         self.sendMessage(json.dumps({
             'type': type,
             'data': data,
@@ -68,10 +58,13 @@ if __name__ == "__main__":
     
     addr = {'host': '', 'port': 8080}
     logger.info('starting the server at {}'.format(addr))
-    game = Game(SquareMapGenerator(
-        x=5, y=5, distance=25,
-        production=20, throughput=1,
-    ).generate())
+    game = Game(
+        nodes=SquareMapGenerator(
+            x=5, y=5, distance=25,
+            production=20, throughput=1,
+        ).generate(),
+        decay_rate=0.1,
+    )
     server = GameServer(
         **addr,
         game=game,
