@@ -21,7 +21,11 @@ To provide negitve feedback for large empires growth (the stronger you get the m
 How to run
 ----------
 
-    pipenv install
     pipenv run python back/server.py
 
-...and websocket should be listening on `localhost:8080`
+...and then websocket should be listening on `localhost:8080`
+
+Tests
+-----
+
+    pipenv run python -m unittest discover -s back

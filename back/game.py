@@ -1,6 +1,7 @@
 import json
 from uuid import uuid4
 import logging
+from collections import defaultdict
 
 
 logger = logging.getLogger(__name__)
@@ -11,9 +12,10 @@ class GameUserError(Exception):
 
 
 class Game:
-    def __init__(self, nodes):
+    def __init__(self, nodes, decay_rate):
         self.players = {}  # map player_id -> player
         self.nodes = nodes  # map node_id -> node
+        self.decay_rate = decay_rate
 
     @property
     def terrain_data(self):
@@ -53,7 +55,7 @@ class Node:
         }
 
     def set_incoming(self, source, movements):
-        if self.incoming.get(source) == movements:
+        if self.incoming.get(source, {}) == movements:
             return set()
         self.incoming[source] = movements
         return {self}
@@ -62,7 +64,7 @@ class Node:
         """Do simulation frame. Return objects with states changed during this frame."""
         total_units = sum(self.units.values())
         new_units = defaultdict(lambda: 0)
-        changed_objects = []
+        changed_objects = set()
 
         for player_id, units in self.units.items():
             # already there
@@ -93,14 +95,16 @@ class Node:
         sending = {}  # target id -> (player -> throughput)
         for target_node_id in self.connections.keys():
             sending[target_node_id] = {}
-        for player_id, units in new_units:
-            disposition = self.dispositions[player_id]
+        for player_id, units in new_units.items():
+            disposition = self.dispositions.get(player_id)
+            if disposition is None:
+                continue
             if units > disposition.target:
                 new_units[player_id] = disposition.target
                 over_target = units - disposition.target
                 for target_node_id, ratio in disposition.ratios.items():
                     sending[target_node_id][player_id] = over_target * ratio / dt
-        for target_node_id, movements in sending:
+        for target_node_id, movements in sending.items():
             ch = self.connections[target_node_id].set_movements(movements)
             changed_objects.update(ch)
             if len(ch) != 0:
@@ -189,3 +193,9 @@ class Player:
 
     def send(self, type, data):
         self.connection.send(type, data)
+
+
+class Disposition:
+    def __init__(self, target, ratios):
+        self.target = target
+        self.ratios = ratios
