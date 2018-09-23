@@ -139,11 +139,11 @@ class Connection:
     def set_movements(self, movements):
         if self.movements == movements:
             return set()
-        self.movements = movements
         self.__changes.insert(0, {
             'remaining_time': self.travel_time,
-            'movements': movements,
+            'movements': self.movements,
         })
+        self.movements = movements
         return {self}
 
     def do_frame(self, game, dt):
@@ -158,9 +158,9 @@ class Connection:
         units = defaultdict(lambda: 0)
         previous_consumed_dt = 0
 
-        def add_units(consumed_dt, units):
+        def add_units(consumed_dt, dunits):
             current_dt = min(dt, consumed_dt) - min(dt, previous_consumed_dt)
-            for player_id, u in units.items():
+            for player_id, u in dunits.items():
                 units[player_id] += u * current_dt
 
         for ch in reversed(self.__changes):
@@ -171,10 +171,12 @@ class Connection:
             add_units(consumed_dt, ch['movements'])
             previous_consumed_dt = consumed_dt
 
-        add_units(self.travel_time, self.movements)
+        add_units(max(self.travel_time, dt), self.movements)
 
-        changed_object.update(target_node.set_incoming(self, {
-            k: v / dt for k, v in units.items()
+        changed_objects.update(target_node.set_incoming(self, {
+            k: v / dt
+            for k, v in units.items()
+            if v > 0
         }))
 
         return changed_objects

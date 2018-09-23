@@ -57,3 +57,44 @@ class NodeTestCase(TestCase):
         changed = self.node.do_frame(self.game, 1)
         self.assertEqual(changed, set())
         self.assertEqual(self.node.units, {'player1': 6})
+
+
+class ConnectionTestCase(TestCase):
+    def setUp(self):
+        self.connection = Connection('node0', throughput=1, travel_time=10)
+        self.game = Game(
+            nodes={
+                'node0': Node(x=0, y=0, production=3, connections={}),
+            },
+            decay_rate=0.1,
+        )
+
+    def test_set_movements_no_change(self):
+        changed = self.connection.set_movements({})
+        self.assertEqual(changed, set())
+
+    def test_set_movements_change(self):
+        changed = self.connection.set_movements({'player1': 5})
+        self.assertEqual(changed, {self.connection})
+
+    def test_do_frame_empty(self):
+        changed = self.connection.do_frame(self.game, 1)
+        self.assertEqual(changed, set())
+
+    def test_do_frame_movement(self):
+        self.connection.set_movements({'player1': 5})
+        changed = self.connection.do_frame(self.game, 1)
+        self.assertEqual(changed, {self.connection})
+
+    def test_do_frame_movement_reached(self):
+        self.connection.set_movements({'player1': 5})
+        changed = self.connection.do_frame(self.game, 11)
+        self.assertEqual(changed, {self.connection, self.game.nodes['node0']})
+        self.assertEqual(self.game.nodes['node0'].incoming[self.connection], {'player1': 5 / 11})
+
+    def test_do_frame_movement_no_change(self):
+        self.connection.set_movements({'player1': 5})
+        self.connection.do_frame(self.game, 11)
+        changed = self.connection.do_frame(self.game, 11)
+        self.assertEqual(changed, {self.game.nodes['node0']})
+        self.assertEqual(self.game.nodes['node0'].incoming[self.connection], {'player1': 5})
