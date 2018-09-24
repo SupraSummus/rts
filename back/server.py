@@ -3,7 +3,7 @@ import logging
 import json
 import os
 
-from game import Game
+from game import Game, SimulationRunner
 from commands import GameUserError
 from map_generators import SquareMapGenerator
 
@@ -13,8 +13,13 @@ logger = logging.getLogger(__name__)
 
 class GameConnectionHandler(WebSocket):
     def handleConnected(self):
-        logger.debug('new client connected')
-        self.player_id = game.create_player(self)
+        try:
+            logger.debug('new client connected')
+            with self.server.game.lock:
+                self.player_id = self.server.game.create_player(self)
+
+        except:
+            logger.exception('error during establishing new user connection')
 
     def handleClose(self):
         print(self.address, 'closed')
@@ -27,7 +32,8 @@ class GameConnectionHandler(WebSocket):
                 self.send('error', 'I only do JSONs, bro.')
                 return
             try:
-                self.server.game.handle_command(self.player_id, data)
+                with self.server.game.lock:
+                    self.server.game.handle_command(self.player_id, data)
             except GameUserError as e:
                 self.send('error', str(e))
                 return
@@ -64,7 +70,9 @@ if __name__ == "__main__":
             production=20, throughput=1,
         ).generate(),
         decay_rate=0.1,
+        starting_units=10,
     )
+    SimulationRunner(game, 1/5).start()
     server = GameServer(
         **addr,
         game=game,

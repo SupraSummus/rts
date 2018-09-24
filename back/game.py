@@ -2,6 +2,9 @@ import json
 from uuid import uuid4
 import logging
 from collections import defaultdict
+import threading
+import time
+import random
 
 from commands import Command, Disposition
 
@@ -9,11 +12,35 @@ from commands import Command, Disposition
 logger = logging.getLogger(__name__)
 
 
+class SimulationRunner(threading.Thread):
+    def __init__(self, game, dt, **kwagrs):
+        self.game = game
+        self.dt = dt
+        super().__init__(**kwagrs)
+
+    def run(self):
+        previous_frame_time = time.monotonic()
+        while True:
+            with self.game.lock:
+                this_frame_start_time = time.monotonic()
+                self.game.do_frame(this_frame_start_time - previous_frame_time)
+                this_frame_end_time = time.monotonic()
+            previous_frame_time = this_frame_start_time
+            to_sleep = self.dt - (this_frame_end_time - this_frame_start_time)
+            if to_sleep <= 0:
+                logger.warning('lagging %d', to_sleep)
+            else:
+                time.sleep(to_sleep)
+
+
 class Game:
-    def __init__(self, nodes, decay_rate):
+    def __init__(self, nodes, decay_rate, starting_units):
+        self.lock = threading.Lock()
         self.players = {}  # map player_id -> player
         self.nodes = nodes  # map node_id -> node
         self.decay_rate = decay_rate
+        self.starting_units = starting_units
+
         self.needs_do_frame = set()
 
     @property
@@ -21,11 +48,16 @@ class Game:
         return {k: v.terrain_data for k, v in self.nodes.items()}
 
     def create_player(self, connection):
-        pid = uuid4()
+        pid = str(uuid4())
         assert pid not in self.players
         p = Player(connection, 'red')
         self.players[pid] = p
         logger.info('created new player with id %s', pid)
+
+        starting_node = random.choice(list(self.nodes.values()))
+        starting_node.units[pid] = self.starting_units
+        self.needs_do_frame.add(starting_node)
+
         return pid
 
     def handle_command(self, player_id, data):
@@ -34,6 +66,23 @@ class Game:
     def send(self, player_id, type, data):
         self.players[player_id].send(type, data)
 
+    def do_frame(self, dt):
+        # do frame - nodes first, then connections
+        changed = set()
+        connections = []
+        for o in self.needs_do_frame:
+            if isinstance(o, Connection):
+                connections.append(o)
+            else:
+                changed.update(o.do_frame(self, dt))
+        for o in connections:
+            changed.update(o.do_frame(self, dt))
+        self.needs_do_frame = changed
+
+        # send out new state
+        for o in changed:
+            for player_id in self.players.keys():
+                self.send(player_id, **o.units_data)
 
 class Node:
     def __init__(self, x, y, production, connections):
@@ -54,6 +103,13 @@ class Node:
             'y': self.y,
             'production': self.production,
             'connections': {k: c.terrain_data for k, c in self.connections.items()},
+        }
+
+    @property
+    def units_data(self):
+        return {
+            'type': 'node',
+            'data': self.units,
         }
 
     def set_incoming(self, source, movements):
@@ -136,6 +192,16 @@ class Connection:
         return {
             'throughput': self.throughput,
             'travel_time': self.travel_time,
+        }
+
+    @property
+    def units_data(self):
+        return {
+            'type': 'connection',
+            'data': [{
+                'remaining_time': self.travel_time,
+                'movements': self.movements,
+            }] + self.__changes,
         }
 
     def set_movements(self, movements):

@@ -13,6 +13,7 @@ class NodeTestCase(TestCase):
         self.game = Game(
             {'node1': self.node},
             decay_rate=0.1,
+            starting_units=1,
         )
 
     def test_set_incoming_change(self):
@@ -67,6 +68,7 @@ class ConnectionTestCase(TestCase):
                 'node0': Node(x=0, y=0, production=3, connections={}),
             },
             decay_rate=0.1,
+            starting_units=1,
         )
 
     def test_set_movements_no_change(self):
