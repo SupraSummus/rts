@@ -7,6 +7,7 @@ name = "pypi"
 SimpleWebSocketServer = {git = "https://github.com/dpallot/simple-websocket-server.git"}
 
 [dev-packages]
+"flake8" = "*"
 
 [requires]
 python_version = "3.7"

@@ -1,7 +1,6 @@
 from SimpleWebSocketServer import SimpleWebSocketServer, WebSocket
 import logging
 import json
-import os
 
 from game import Game, SimulationRunner
 from commands import GameUserError
@@ -18,7 +17,7 @@ class GameConnectionHandler(WebSocket):
             with self.server.game.lock:
                 self.player_id = self.server.game.create_player(self)
 
-        except:
+        except:  # noqa E722
             logger.exception('error during establishing new user connection')
 
     def handleClose(self):
@@ -38,7 +37,7 @@ class GameConnectionHandler(WebSocket):
                 self.send('error', str(e))
                 return
 
-        except:
+        except:  # noqa E722
             logger.exception('error during handling user data')
             self.close(status=1011, reason='Internal server error')
 
@@ -61,7 +60,7 @@ class GameServer(SimpleWebSocketServer):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    
+
     addr = {'host': '', 'port': 8080}
     logger.info('starting the server at {}'.format(addr))
     game = Game(
@@ -72,7 +71,7 @@ if __name__ == "__main__":
         decay_rate=0.1,
         starting_units=10,
     )
-    SimulationRunner(game, 1/5).start()
+    SimulationRunner(game, 1 / 5).start()
     server = GameServer(
         **addr,
         game=game,

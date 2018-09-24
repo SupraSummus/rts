@@ -1,14 +1,15 @@
 from unittest import TestCase
 
-from game import Game, Node, Connection, Disposition
+from game import Game, Node, Connection
+from commands import Disposition
 
 
 class NodeTestCase(TestCase):
     def setUp(self):
-        self.node = Node(x=0, y=0, production=3, connections={
-            'node2': Connection('node2', throughput=1, travel_time=10),
-            'node3': Connection('node3', throughput=1, travel_time=10),
-            'node4': Connection('node4', throughput=1, travel_time=10),
+        self.node = Node(id='node1', x=0, y=0, production=3, connections={
+            'node2': Connection('node1', 'node2', throughput=1, travel_time=10),
+            'node3': Connection('node1', 'node3', throughput=1, travel_time=10),
+            'node4': Connection('node1', 'node4', throughput=1, travel_time=10),
         })
         self.game = Game(
             {'node1': self.node},
@@ -62,10 +63,10 @@ class NodeTestCase(TestCase):
 
 class ConnectionTestCase(TestCase):
     def setUp(self):
-        self.connection = Connection('node0', throughput=1, travel_time=10)
+        self.connection = Connection('node1', 'node0', throughput=1, travel_time=10)
         self.game = Game(
             nodes={
-                'node0': Node(x=0, y=0, production=3, connections={}),
+                'node0': Node('node0', x=0, y=0, production=3, connections={}),
             },
             decay_rate=0.1,
             starting_units=1,

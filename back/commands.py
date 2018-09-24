@@ -1,6 +1,6 @@
 from validators import (
     ValidationError,
-    blank_value_validator, string_validator, float_validator,
+    string_validator, float_validator,
     union_validator, dict_validator, record_validator,
 )
 
@@ -66,4 +66,4 @@ class Disposition:
     def __init__(self, target, ratios):
         self.target = target
         ratios_sum = sum(ratios.values())
-        self.ratios = {k : v / ratios_sum for k, v in ratios.items()}
+        self.ratios = {k: v / ratios_sum for k, v in ratios.items()}

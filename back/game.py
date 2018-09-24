@@ -1,4 +1,3 @@
-import json
 from uuid import uuid4
 import logging
 from collections import defaultdict
@@ -6,7 +5,7 @@ import threading
 import time
 import random
 
-from commands import Command, Disposition
+from commands import Command
 
 
 logger = logging.getLogger(__name__)
@@ -82,10 +81,18 @@ class Game:
         # send out new state
         for o in changed:
             for player_id in self.players.keys():
-                self.send(player_id, **o.units_data)
+                self.send(player_id, 'units', {
+                    'type': o.type_data,
+                    'id': o.id,
+                    'units': o.units_data,
+                })
+
 
 class Node:
-    def __init__(self, x, y, production, connections):
+    type_data = 'node'
+
+    def __init__(self, id, x, y, production, connections):
+        self.id = id
         self.x = x
         self.y = y
         self.production = production
@@ -107,10 +114,7 @@ class Node:
 
     @property
     def units_data(self):
-        return {
-            'type': 'node',
-            'data': self.units,
-        }
+        return self.units
 
     def set_incoming(self, source, movements):
         if self.incoming.get(source, {}) == movements:
@@ -175,10 +179,13 @@ class Node:
 
 
 class Connection:
-    def __init__(self, target_node_id, throughput, travel_time):
+    type_data = 'connection'
+
+    def __init__(self, source_node_id, target_node_id, throughput, travel_time):
         assert throughput > 0
         assert travel_time > 0
 
+        self.source_node_id = source_node_id
         self.target_node_id = target_node_id
         self.throughput = throughput
         self.travel_time = travel_time
@@ -196,13 +203,14 @@ class Connection:
 
     @property
     def units_data(self):
-        return {
-            'type': 'connection',
-            'data': [{
-                'remaining_time': self.travel_time,
-                'movements': self.movements,
-            }] + self.__changes,
-        }
+        return [{
+            'remaining_time': self.travel_time,
+            'movements': self.movements,
+        }] + self.__changes
+
+    @property
+    def id(self):
+        return (self.source_node_id, self.target_node_id)
 
     def set_movements(self, movements):
         if self.movements == movements:

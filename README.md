@@ -28,4 +28,5 @@ How to run
 Tests
 -----
 
+    pipenv run flake8
     pipenv run python -m unittest discover -s back

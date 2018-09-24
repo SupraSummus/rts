@@ -11,6 +11,7 @@ class MapGenerator:
     def generate(self):
         return {
             self.stringify_node_id(node_id): Node(
+                id=self.stringify_node_id(node_id),
                 **self.node_position(node_id),
                 production=self.node_production(node_id),
                 connections={
@@ -44,10 +45,12 @@ class MapGenerator:
         f = self.node_position(from_id)
         t = self.node_position(to_id)
         return {
+            'source_node_id': from_id,
             'target_node_id': to_id,
             'throughput': self.throughput,
             'travel_time': ((f['x'] - t['x']) ** 2 + (f['y'] - t['y']) ** 2) ** 0.5,
         }
+
 
 class SquareMapGenerator(MapGenerator):
     def __init__(self, x, y, distance, **kwargs):
