@@ -70,6 +70,7 @@ if __name__ == "__main__":
         ).generate(),
         decay_rate=0.1,
         starting_units=10,
+        offensive_force=1,
     )
     SimulationRunner(game, 1 / 5).start()
     server = GameServer(

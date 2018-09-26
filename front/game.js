@@ -162,12 +162,12 @@ class NodeUnits {
 		this.units.forEach(u => u.destroy());
 		this.units = [];
 
-		let totalUnits = units.reduce((a, u) => (a + u.amount), 0);
+		let totalUnits = Array.from(units.values()).reduce((a, b) => (a + b), 0);
 		let outerRadius = Math.sqrt(totalUnits / Math.PI) * UNIT_SCALE;
 
 		let ang = 0; // in degrees
-		for (let u of units) {
-			let thisAng = (u.amount / totalUnits) * 360;
+		for (let [playerId, u] of units.entries()) {
+			let thisAng = (u / totalUnits) * 360;
 			let arc = new Konva.Arc({
 				x: this.x,
 				y: this.y,
@@ -175,7 +175,7 @@ class NodeUnits {
 				outerRadius: outerRadius,
 				rotation: ang,
 				angle: thisAng,
-				fill: u.color,
+				fill: this.drawingThing.playerColor(playerId),
 			});
 			ang += thisAng;
 			this.drawingThing.unitsLayer.add(arc);
@@ -321,6 +321,9 @@ class Game {
 			console.log('got message', parsed.type);
 			({
 				map: map => game._loadMap(map),
+				units: data => ({
+					node: (id, units) => game.updateUnits(id, obj2map(units)),
+				})[data.type](data.id, data.units),
 			})[parsed.type](parsed.data);
 		};
 	}
@@ -360,6 +363,10 @@ class Game {
 
 	registerAnimation(f) {
 		this.animations.push(f);
+	}
+
+	playerColor(playerId) {
+		return 'red';
 	}
 
 }

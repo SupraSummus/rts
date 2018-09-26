@@ -33,12 +33,13 @@ class SimulationRunner(threading.Thread):
 
 
 class Game:
-    def __init__(self, nodes, decay_rate, starting_units):
+    def __init__(self, nodes, decay_rate, starting_units, offensive_force):
         self.lock = threading.Lock()
         self.players = {}  # map player_id -> player
         self.nodes = nodes  # map node_id -> node
         self.decay_rate = decay_rate
         self.starting_units = starting_units
+        self.offensive_force = offensive_force
 
         self.needs_do_frame = set()
 

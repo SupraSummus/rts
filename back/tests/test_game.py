@@ -15,6 +15,7 @@ class NodeTestCase(TestCase):
             {'node1': self.node},
             decay_rate=0.1,
             starting_units=1,
+            offensive_force=1,
         )
 
     def test_set_incoming_change(self):
@@ -70,6 +71,7 @@ class ConnectionTestCase(TestCase):
             },
             decay_rate=0.1,
             starting_units=1,
+            offensive_force=1,
         )
 
     def test_set_movements_no_change(self):
