@@ -1,7 +1,7 @@
 from validators import (
     ValidationError,
     string_validator, float_validator,
-    union_validator, dict_validator, record_validator,
+    union_validator, dict_validator, record_validator, array_validator,
 )
 
 
@@ -14,6 +14,7 @@ class Command:
     def validator():
         return union_validator({
             'map': MapRequest.validator(),
+            'player': PlayerInfoRequest.validator(),
             'disposition': DispositionCommand.validator(),
         })
 
@@ -37,6 +38,24 @@ class MapRequest(Command):
         game.send(player_id, 'map', game.terrain_data)
 
 
+class PlayerInfoRequest(Command):
+    @classmethod
+    def validator(cls):
+        return record_validator(cls, {
+            'player_ids': array_validator(string_validator),
+        })
+
+    def __init__(self, player_ids):
+        self.player_ids = player_ids
+
+    def execute(self, game, player_id):
+        game.send(player_id, 'player', {
+            player_id: game.players[player_id].player_data
+            for player_id in self.player_ids
+            if player_id in game.players
+        })
+
+
 class DispositionCommand(Command):
     @classmethod
     def validator(cls):
@@ -45,7 +64,7 @@ class DispositionCommand(Command):
             'disposition': Disposition.validator(),
         })
 
-    def init(self, node_id, disposition):
+    def __init__(self, node_id, disposition):
         self.node_id = node_id
         self.disposition = disposition
 

@@ -299,6 +299,7 @@ class Game {
 		this.stage.add(this.controlsLayer);
 
 		this.nodes = new Map();
+		this.players = new Map();
 
 		// zoom, drag, ...
 		prepareCanvas(this.canvas);
@@ -321,6 +322,11 @@ class Game {
 			console.log('got message', parsed.type);
 			({
 				map: map => game._loadMap(map),
+				player: data => {
+					for (let playerId in data) {
+						game.players.set(playerId, data[playerId]);
+					}
+				},
 				units: data => ({
 					node: (id, units) => game.updateUnits(id, obj2map(units)),
 				})[data.type](data.id, data.units),
@@ -366,7 +372,15 @@ class Game {
 	}
 
 	playerColor(playerId) {
-		return 'red';
+		if (this.players.has(playerId)) {
+			return this.players.get(playerId).color;
+		} else {
+			this.sock.send(JSON.stringify({
+				type: 'player',
+				data: {player_ids: [playerId]},
+			}));
+			return 'gray';
+		}
 	}
 
 }

@@ -264,5 +264,9 @@ class Player:
         self.connection = connection
         self.color = color
 
+    @property
+    def player_data(self):
+        return {'color': self.color}
+
     def send(self, type, data):
         self.connection.send(type, data)

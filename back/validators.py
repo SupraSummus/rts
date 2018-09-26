@@ -36,6 +36,17 @@ def dict_validator(value_validator):
     return validate
 
 
+def array_validator(value_validator):
+    def validate(data, path):
+        if not isinstance(data, list):
+            raise ValidationError('expected list', path)
+        return [
+            value_validator(e, path + (i,))
+            for i, e in enumerate(data)
+        ]
+    return validate
+
+
 def record_validator(constructor, validators_dict):
     def validate(data, path):
         if not isinstance(data, dict):
